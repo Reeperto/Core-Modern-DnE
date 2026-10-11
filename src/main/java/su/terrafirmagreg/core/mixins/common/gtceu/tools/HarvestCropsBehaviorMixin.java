@@ -12,6 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import com.eerussianguy.firmalife.common.blockentities.HangingPlanterBlockEntity;
 import com.eerussianguy.firmalife.common.blockentities.LargePlanterBlockEntity;
 import com.eerussianguy.firmalife.common.blocks.greenhouse.LargePlanterBlock;
+import com.eerussianguy.firmalife.common.util.Plantable;
 import com.google.common.collect.Sets;
 import com.gregtechceu.gtceu.api.item.tool.ToolHelper;
 import com.gregtechceu.gtceu.common.item.tool.behavior.HarvestCropsBehavior;
@@ -108,39 +109,44 @@ public abstract class HarvestCropsBehaviorMixin {
 
     @Unique
     private static boolean tfg$processPlanters(Level level, Player player, BlockState blockState, BlockPos pos) {
-        BlockEntity blockEntity = level.getBlockEntity(pos);
-
-        if (blockEntity instanceof LargePlanterBlockEntity planterBlockEntity) {
-            InteractionResult result = null;
-            Direction direction;
-
-            if (blockEntity instanceof HangingPlanterBlockEntity)
-                direction = Direction.DOWN;
-            else {
-                direction = Direction.UP;
-            }
-
-            for (int i = 0; i < planterBlockEntity.slots(); i++) {
-                int iFinal = i;
-                InteractionResult resultTemp = LargePlanterBlock.takeSlot(level, planterBlockEntity, i, (item) -> {
-                    if (item.is(Tags.Items.SEEDS)) {
-                        if (blockState.getBlock() instanceof LargePlanterBlock planterBlock) {
-                            planterBlock.insertSlot(level, planterBlockEntity, item, player, iFinal);
-                        }
-                    }
-
-                    Block.popResourceFromFace(level, pos, direction, item);
-                });
-
-                if (result != InteractionResult.CONSUME) {
-                    result = resultTemp;
-                }
-            }
-
-            return result == InteractionResult.CONSUME;
+        if (!(blockState.getBlock() instanceof LargePlanterBlock planterBlock
+                && level.getBlockEntity(pos) instanceof LargePlanterBlockEntity planterBlockEntity)) {
+            return false;
         }
 
-        return false;
+        InteractionResult result = null;
+        Direction direction;
+
+        if (planterBlockEntity instanceof HangingPlanterBlockEntity) {
+            direction = Direction.DOWN;
+        } else {
+            direction = Direction.UP;
+        }
+
+        for (int i = 0; i < planterBlockEntity.slots(); i++) {
+            Plantable plantable = planterBlockEntity.getPlantable(i);
+
+            if (plantable == null) {
+                continue;
+            }
+
+            ItemStack seed = plantable.getSeed();
+
+            final int slot = i;
+            InteractionResult resultTemp = LargePlanterBlock.takeSlot(level, planterBlockEntity, i, (item) -> {
+                if (!seed.isEmpty() && ItemStack.isSameItem(item, seed)) {
+                    planterBlock.insertSlot(level, planterBlockEntity, item, player, slot);
+                }
+
+                Block.popResourceFromFace(level, pos, direction, item);
+            });
+
+            if (result != InteractionResult.CONSUME) {
+                result = resultTemp;
+            }
+        }
+
+        return result == InteractionResult.CONSUME;
     }
 
     @Unique
